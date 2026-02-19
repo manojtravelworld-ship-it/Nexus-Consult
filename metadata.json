@@ -1,0 +1,9 @@
+{
+  "name": "Nexus Justice Voice Agent",
+  "description": "A professional PWA voice-enabled AI assistant for legal information and case analysis, powered by Gemini.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}

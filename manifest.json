@@ -1,0 +1,24 @@
+
+{
+  "name": "Nexus Justice Voice Agent",
+  "short_name": "Nexus Justice",
+  "description": "Professional AI legal assistant with voice capabilities.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://nexus-voice-agent-95034052444.us-west1.run.app/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTI4IiBmaWxsPSIjMDIwNjE3Ii8+CjxwYXRoIGQ9Ik0yNTYgMTI4TDEyOCAzODRIMzg0TDI1NiAxMjhaIiBmaWxsPSIjNEY0NkU1IiBmaWxsLW9wYWNpdHk9IjAuMiIvPgo8cGF0aCBkPSJNMjU2IDE0OEwxNDggMzY0SDM2NEwyNTYgMTQ4WiIgc3Ryb2tlPSIjNEY0NkU1IiBzdHJva2Utd2lkdGg9IjI0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0yNTYgMjAwVjMyME0yMDYgMjUwSDMwNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
