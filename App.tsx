@@ -113,6 +113,39 @@ When the camera is active, you perform real-time OCR and summarize documents.
 Focus on legal clauses, headers, and specific names or dates. 
 Be precise, professional, and act as a senior legal counsel advisor.`;
 
+interface ReferredSubscriber {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  tier: 'Starter' | 'Pro' | 'Elite';
+  price: number;
+  signupDate: string;
+  status: 'Paid' | 'Pending';
+  commissionPaid: boolean;
+}
+
+interface AffiliatePayment {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'Completed' | 'Processing';
+  method: string;
+}
+
+const mockReferredSubscribers: ReferredSubscriber[] = [
+  { id: 'sub-1', name: 'John Doe', email: 'john@example.com', phone: '+1 234 567 8900', tier: 'Pro', price: 99, signupDate: '2026-02-15', status: 'Paid', commissionPaid: false },
+  { id: 'sub-2', name: 'Jane Smith', email: 'jane@example.com', phone: '+1 987 654 3210', tier: 'Elite', price: 199, signupDate: '2026-02-20', status: 'Pending', commissionPaid: false },
+  { id: 'sub-3', name: 'Alice Johnson', email: 'alice@example.com', phone: '+1 555 123 4567', tier: 'Starter', price: 49, signupDate: '2026-01-10', status: 'Paid', commissionPaid: true },
+  { id: 'sub-4', name: 'Bob Williams', email: 'bob@example.com', phone: '+1 444 987 6543', tier: 'Elite', price: 199, signupDate: '2026-02-25', status: 'Paid', commissionPaid: false },
+];
+
+const mockAffiliatePayments: AffiliatePayment[] = [
+  { id: 'pay-1', date: '2026-02-04', amount: 145.80, status: 'Completed', method: 'Bank Transfer (...4920)' },
+  { id: 'pay-2', date: '2026-01-04', amount: 89.50, status: 'Completed', method: 'Bank Transfer (...4920)' },
+  { id: 'pay-3', date: '2025-12-04', amount: 210.00, status: 'Completed', method: 'Bank Transfer (...4920)' },
+];
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('home');
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
@@ -590,6 +623,24 @@ const App: React.FC = () => {
     { id: 'agency-connectivity', label: 'Connectivity' },
     { id: 'agency-api-usage', label: 'API Usage' }
   ];
+
+  const handleDownloadPaymentsCSV = () => {
+    const headers = ['Payment ID', 'Date', 'Amount (USD)', 'Status', 'Method'];
+    const csvContent = [
+      headers.join(','),
+      ...mockAffiliatePayments.map(p => `${p.id},${p.date},${p.amount},${p.status},"${p.method}"`)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'affiliate_payments.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="flex h-screen bg-[#020617] text-slate-100 overflow-hidden font-sans">
@@ -1790,41 +1841,123 @@ const App: React.FC = () => {
                       <h3 className="text-6xl font-black tracking-tighter italic">Affiliates<span className="text-slate-500 not-italic">Network</span></h3>
                     </div>
                   </div>
-                  <button className="px-8 py-4 bg-emerald-600 text-black rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-500 shadow-xl shadow-emerald-600/20 transition-all">
-                    Register New Partner
-                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-gradient-to-br from-emerald-600/20 to-transparent border border-emerald-500/20 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl">
-                    <h4 className="text-2xl font-black italic tracking-tighter">Your Rewards</h4>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-6xl font-black">4,250</span>
-                      <span className="text-emerald-500 font-black uppercase tracking-widest text-xs">Credits</span>
+                <div className="grid grid-cols-1 gap-8">
+                  <div className="bg-gradient-to-br from-emerald-600/20 to-transparent border border-emerald-500/20 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl items-center justify-center text-center">
+                    <div className="text-emerald-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">Next Payout: March 4, 2026</div>
+                    <h4 className="text-2xl font-black italic tracking-tighter">Pending Commission</h4>
+                    <div className="flex items-baseline gap-2 justify-center">
+                      <span className="text-8xl font-black text-emerald-400">
+                        ${mockReferredSubscribers.filter(sub => sub.status === 'Paid' && !sub.commissionPaid).reduce((total, sub) => total + (sub.price * 0.2), 0).toFixed(2)}
+                      </span>
+                      <span className="text-emerald-500 font-black uppercase tracking-widest text-xl">USD</span>
                     </div>
-                    <p className="text-slate-400 text-sm leading-relaxed">
-                      You are in the top 5% of our affiliate network. Keep referring to unlock the "Titan" tier rewards.
+                    <p className="text-slate-400 text-sm leading-relaxed max-w-2xl mt-4">
+                      Commission is 20% of the first month's payment for each new subscriber under your referral. Payments are processed on the 4th of every month.
                     </p>
-                    <button className="mt-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:bg-white/10 transition-all">
-                      Redeem Credits
-                    </button>
                   </div>
 
-                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl">
-                    <h4 className="text-2xl font-black italic tracking-tighter">Referral Link</h4>
-                    <div className="bg-black/40 p-6 rounded-2xl border border-white/5 flex items-center justify-between group cursor-pointer hover:border-emerald-500/30 transition-all">
-                      <code className="text-emerald-500 font-mono text-sm">nexus.justice/ref/adv-992</code>
-                      <svg className="w-5 h-5 text-slate-600 group-hover:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl overflow-hidden">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-2xl font-black italic tracking-tighter">Payment History</h4>
+                      <button 
+                        onClick={handleDownloadPaymentsCSV}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download CSV
+                      </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
-                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Total Clicks</div>
-                        <div className="text-2xl font-black">12,402</div>
-                      </div>
-                      <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
-                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Conversions</div>
-                        <div className="text-2xl font-black">842</div>
-                      </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Date</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Amount</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Method</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mockAffiliatePayments.map(payment => (
+                            <tr key={payment.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                              <td className="py-4 px-4">
+                                <div className="font-bold text-sm text-slate-200">{payment.date}</div>
+                                <div className="text-xs text-slate-500">{payment.id}</div>
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-sm font-bold text-emerald-400">${payment.amount.toFixed(2)}</div>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  payment.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                }`}>
+                                  {payment.status}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-sm text-slate-300">{payment.method}</div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl overflow-hidden">
+                    <h4 className="text-2xl font-black italic tracking-tighter">Referred Subscribers</h4>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Subscriber</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Contact</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Tier</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
+                            <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Commission (20%)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mockReferredSubscribers.map(sub => (
+                            <tr key={sub.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                              <td className="py-4 px-4">
+                                <div className="font-bold text-sm text-slate-200">{sub.name}</div>
+                                <div className="text-xs text-slate-500">Joined: {sub.signupDate}</div>
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-sm text-slate-300">{sub.phone}</div>
+                                <div className="text-xs text-slate-500">{sub.email}</div>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  sub.tier === 'Elite' ? 'bg-amber-500/20 text-amber-400' :
+                                  sub.tier === 'Pro' ? 'bg-indigo-500/20 text-indigo-400' :
+                                  'bg-slate-500/20 text-slate-400'
+                                }`}>
+                                  {sub.tier}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                  sub.status === 'Paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                                }`}>
+                                  {sub.status === 'Pending' ? 'Pending (31 Days)' : 'Paid'}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="text-sm font-bold text-emerald-400">${(sub.price * 0.2).toFixed(2)}</div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                  {sub.commissionPaid ? 'Paid Out' : (sub.status === 'Paid' ? 'Pending Payout' : 'Awaiting Payment')}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
