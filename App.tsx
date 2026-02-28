@@ -11,15 +11,102 @@ const OUTPUT_SAMPLE_RATE = 24000;
 const FRAME_RATE = 2; 
 const JPEG_QUALITY = 0.6;
 
-type AppView = 'home' | 'reading-room' | 'toolbox' | 'command' | 'system-prompt' | 'clients' | 'consult' | 'archive' | 'interaction-feed';
+type AppView = 'home' | 'advocate-signup' | 'reading-room' | 'toolbox' | 'command' | 'clients' | 'consult' | 'archive' | 'interaction-feed' | 'agency-hq' | 'agency-database' | 'affiliates' | 'support-chat' | 'agency-messages' | 'agency-broadcasts' | 'agency-knowledge' | 'agency-prompts' | 'agency-connectivity' | 'agency-api-usage' | 'notifications';
+
+interface Notification {
+  id: number;
+  message: string;
+  date: string;
+  read: boolean;
+  type: 'general' | 'payment' | 'default';
+}
+
+interface SupportMessage {
+  id: number;
+  role: 'user' | 'ai' | 'admin';
+  text: string;
+}
 
 interface ClientRecord {
+  slNo: number;
+  name: string;
+  phone: string;
+  courtName: string;
+  caseNumber: string;
+  oppAdvocateName: string;
+  oppAdvocatePhone: string;
+  nextPostingDate: string;
+  purposeOfPosting: string;
+}
+
+interface Subscriber {
   id: string;
   name: string;
-  caseType: string;
-  status: 'Active' | 'Pending' | 'Closed';
-  lastInteraction: string;
+  plan: 'Trial' | 'Pro';
+  joinDate: string;
 }
+
+interface Affiliate {
+  id: string;
+  name: string;
+  phone: string;
+  code: string;
+  subscribers: Subscriber[];
+}
+
+interface Advocate {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  state: string;
+  district: string;
+  subscription: 'Starter' | 'Pro';
+  couponCode: string;
+  referredBy: string;
+  joinDate: string;
+}
+
+const locationData = {
+  "Kerala": ["Thiruvananthapuram", "Kollam", "Ernakulam", "Kozhikode", "Thrissur", "Palakkad", "Malappuram", "Kannur"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli", "Tirunelveli"],
+  "Karnataka": ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi", "Belagavi", "Kalaburagi"],
+  "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
+  "Delhi": ["New Delhi", "North Delhi", "South Delhi", "East Delhi", "West Delhi"]
+};
+
+const mockAffiliates: Affiliate[] = [
+  {
+    id: 'AFF-001',
+    name: 'Sarah Jenkins',
+    phone: '+1 555-0101',
+    code: 'SJ-NEXUS-24',
+    subscribers: [
+      { id: 'SUB-101', name: 'John Doe', plan: 'Pro', joinDate: '2026-01-15' },
+      { id: 'SUB-102', name: 'Alice Smith', plan: 'Trial', joinDate: '2026-02-10' },
+    ]
+  },
+  {
+    id: 'AFF-002',
+    name: 'Marcus Thorne',
+    phone: '+1 555-0102',
+    code: 'MT-LEGAL-99',
+    subscribers: [
+      { id: 'SUB-201', name: 'Tech Corp LLC', plan: 'Pro', joinDate: '2025-11-20' },
+    ]
+  },
+  {
+    id: 'AFF-003',
+    name: 'Elena Rodriguez',
+    phone: '+1 555-0103',
+    code: 'ER-LAW-55',
+    subscribers: [
+      { id: 'SUB-301', name: 'Bob Johnson', plan: 'Trial', joinDate: '2026-02-18' },
+      { id: 'SUB-302', name: 'Emma Davis', plan: 'Trial', joinDate: '2026-02-19' },
+      { id: 'SUB-303', name: 'Michael Brown', plan: 'Pro', joinDate: '2025-12-05' },
+    ]
+  }
+];
 
 const DEFAULT_SYSTEM_PROMPT = `You are Nexus Justice, a high-level legal AI assistant. 
 When the camera is active, you perform real-time OCR and summarize documents. 
@@ -63,14 +150,90 @@ const App: React.FC = () => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [draftText, setDraftText] = useState("");
 
+  // Affiliate States
+  const [affiliateSearch, setAffiliateSearch] = useState("");
+  const [selectedAffiliateId, setSelectedAffiliateId] = useState<string | null>(mockAffiliates[0].id);
+
+  // Advocate Database States
+  const [advocates, setAdvocates] = useState<Advocate[]>([
+    { id: 'ADV-1001', name: 'John Doe', phone: '+1 555-0123', email: 'john@example.com', state: 'Kerala', district: 'Ernakulam', subscription: 'Pro', couponCode: 'JOH-123', referredBy: 'Adm-2026', joinDate: '2026-01-10' },
+    { id: 'ADV-1002', name: 'Alice Smith', phone: '+1 555-0456', email: 'alice@example.com', state: 'Karnataka', district: 'Bengaluru', subscription: 'Starter', couponCode: 'ALI-456', referredBy: 'JOH-123', joinDate: '2026-02-15' }
+  ]);
+  const [currentAdvocateId, setCurrentAdvocateId] = useState<string | null>(() => {
+    return localStorage.getItem('nexus_advocate_id') || null;
+  });
+  const [signupForm, setSignupForm] = useState({ name: '', phone: '', email: '', district: '', taluk: '', court: '', address: '', referralCode: '', passphrase: '' });
+  const [loginForm, setLoginForm] = useState({ id: '', passphrase: '' });
+  const [uplinkStep, setUplinkStep] = useState<'hardware' | 'login' | 'register' | 'forgot-password'>('hardware');
+  const [dbFilterState, setDbFilterState] = useState('');
+  const [dbFilterDistrict, setDbFilterDistrict] = useState('');
+  const [dbFilterPlan, setDbFilterPlan] = useState('');
+  const [dbSearchQuery, setDbSearchQuery] = useState('');
+
   // Mock Database Data
-  const clients: ClientRecord[] = [
-    { id: 'NX-402', name: 'Sreedharan K.', caseType: 'Corporate Litigation', status: 'Active', lastInteraction: '2 mins ago' },
-    { id: 'NX-509', name: 'Elena Rodriguez', caseType: 'Intellectual Property', status: 'Active', lastInteraction: '1 hour ago' },
-    { id: 'NX-112', name: 'Marcus Thorne', caseType: 'Real Estate Fraud', status: 'Pending', lastInteraction: 'Yesterday' },
-    { id: 'NX-882', name: 'Sarah Jenkins', caseType: 'Family Law / Trust', status: 'Closed', lastInteraction: '3 days ago' },
-    { id: 'NX-334', name: 'Orbital Tech Corp', caseType: 'Acquisitions', status: 'Active', lastInteraction: 'Now' },
-  ];
+  const [clients, setClients] = useState<ClientRecord[]>([
+    { slNo: 1, name: 'Sreedharan K.', phone: '+91 9876543210', courtName: 'District Court, Aluva', caseNumber: 'OS 145/2025', oppAdvocateName: 'Ramesh Menon', oppAdvocatePhone: '+91 9876543211', nextPostingDate: '2026-03-15', purposeOfPosting: 'Filing Written Statement' },
+    { slNo: 2, name: 'Elena Rodriguez', phone: '+1 555-0199', courtName: 'High Court', caseNumber: 'WP(C) 204/2026', oppAdvocateName: 'Sarah Jenkins', oppAdvocatePhone: '+1 555-0200', nextPostingDate: '2026-03-20', purposeOfPosting: 'Hearing' },
+    { slNo: 3, name: 'Marcus Thorne', phone: '+1 555-0188', courtName: 'Magistrate Court', caseNumber: 'CC 55/2026', oppAdvocateName: 'David Clark', oppAdvocatePhone: '+1 555-0201', nextPostingDate: '2026-04-05', purposeOfPosting: 'Evidence' },
+    { slNo: 4, name: 'Sarah Jenkins', phone: '+1 555-0177', courtName: 'Family Court', caseNumber: 'OP 89/2025', oppAdvocateName: 'Priya Sharma', oppAdvocatePhone: '+91 9876543212', nextPostingDate: '2026-03-10', purposeOfPosting: 'Counseling' },
+    { slNo: 5, name: 'Orbital Tech Corp', phone: '+1 555-0166', courtName: 'Commercial Court', caseNumber: 'CS 12/2026', oppAdvocateName: 'Michael Chang', oppAdvocatePhone: '+1 555-0202', nextPostingDate: '2026-04-12', purposeOfPosting: 'Framing of Issues' },
+  ]);
+
+  const [isAddingClient, setIsAddingClient] = useState(false);
+  const [newClient, setNewClient] = useState<Partial<ClientRecord>>({});
+
+  // Support Chat States
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([
+    { id: 1, role: 'ai', text: 'Hello. I am the Nexus Support AI. Please describe any issues you are facing with the platform or administrative portal, and I will suggest solutions or escalate to human admins.' }
+  ]);
+  const [supportInput, setSupportInput] = useState("");
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
+
+  // Agency HQ States
+  const [agencyMessages, setAgencyMessages] = useState<SupportMessage[]>([
+    { id: 1, role: 'user', text: 'I am having trouble accessing the latest case files from the archive.' },
+    { id: 2, role: 'admin', text: 'We are looking into the archive sync issue. It should be resolved shortly.' }
+  ]);
+  const [agencyMessageInput, setAgencyMessageInput] = useState("");
+
+  const [advocateNotifications, setAdvocateNotifications] = useState<Notification[]>([
+    { id: 1, message: "Welcome to Nexus Justice v3.1. Your affiliate link is ready.", date: "2026-02-27", read: false, type: 'general' },
+    { id: 2, message: "John Doe (555-0192) joined under you, congratulations!", date: "2026-02-27", read: false, type: 'payment' }
+  ]);
+  const [broadcastInput, setBroadcastInput] = useState("");
+  const [broadcastCategory, setBroadcastCategory] = useState<'all' | 'payment' | 'default' | 'specific'>('all');
+  const [broadcastSpecificId, setBroadcastSpecificId] = useState("");
+
+  const [knowledgeBaseDocs, setKnowledgeBaseDocs] = useState<{id: number, title: string, date: string}[]>([
+    { id: 1, title: 'Advocate Portal Usage Guidelines 2026', date: '2026-01-15' },
+    { id: 2, title: 'Standard Fee Structures & Affiliate Payments', date: '2026-02-01' }
+  ]);
+
+  const [adminSystemPrompt, setAdminSystemPrompt] = useState(() => localStorage.getItem('nexus_admin_prompt') || 'You are the Master AI. You oversee all operations and ensure compliance with admin directives.');
+  const [advocateSystemPrompt, setAdvocateSystemPrompt] = useState(() => localStorage.getItem('nexus_advocate_prompt') || 'You are an Advocate AI Assistant. You must obey the Master AI and assist advocates with their cases.');
+  const [affiliateSystemPrompt, setAffiliateSystemPrompt] = useState(() => localStorage.getItem('nexus_affiliate_prompt') || 'You are an Affiliate AI Assistant. You manage payments, rewards, and onboarding.');
+
+  const handleAddClient = () => {
+    if (!newClient.name || !newClient.phone) {
+      setError("Name and Phone are required.");
+      return;
+    }
+    const nextSlNo = clients.length > 0 ? Math.max(...clients.map(c => c.slNo)) + 1 : 1;
+    const clientToAdd: ClientRecord = {
+      slNo: nextSlNo,
+      name: newClient.name || '',
+      phone: newClient.phone || '',
+      courtName: newClient.courtName || '',
+      caseNumber: newClient.caseNumber || '',
+      oppAdvocateName: newClient.oppAdvocateName || '',
+      oppAdvocatePhone: newClient.oppAdvocatePhone || '',
+      nextPostingDate: newClient.nextPostingDate || '',
+      purposeOfPosting: newClient.purposeOfPosting || ''
+    };
+    setClients([...clients, clientToAdd]);
+    setIsAddingClient(false);
+    setNewClient({});
+  };
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -372,18 +535,60 @@ const App: React.FC = () => {
     }
   };
 
-  const isAdvocatePortal = view !== 'home';
+  const handleSendSupportMessage = async () => {
+    if (!supportInput.trim()) return;
+    
+    const newUserMsg: SupportMessage = { id: Date.now(), role: 'user', text: supportInput };
+    setSupportMessages(prev => [...prev, newUserMsg]);
+    setSupportInput("");
+    setIsSendingSupport(true);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `You are an AI IT Support Assistant for the "Nexus Justice" legal platform. 
+      An advocate has reported the following issue to the administrative portal: "${newUserMsg.text}".
+      Please provide a helpful, technical, or administrative solution to their problem. Keep it concise, professional, and actionable.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+
+      const newAiMsg: SupportMessage = { id: Date.now() + 1, role: 'ai', text: response.text || "I'm sorry, I couldn't process that request." };
+      setSupportMessages(prev => [...prev, newAiMsg]);
+    } catch (err) {
+      console.error("Support chat error:", err);
+      setSupportMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: "Error connecting to AI support. Please try again later." }]);
+    } finally {
+      setIsSendingSupport(false);
+    }
+  };
+
+  const isAdvocatePortal = ['reading-room', 'toolbox', 'command', 'clients', 'consult', 'archive', 'interaction-feed', 'support-chat', 'notifications'].includes(view);
+  const isAgencyPortal = ['agency-hq', 'agency-database', 'agency-messages', 'agency-broadcasts', 'agency-knowledge', 'agency-prompts', 'agency-connectivity', 'agency-api-usage'].includes(view);
 
   const navigationItems: { id: AppView, label: string }[] = [
     { id: 'home', label: 'Home' },
     { id: 'reading-room', label: 'Reading Room' },
     { id: 'toolbox', label: 'Toolbox' },
     { id: 'command', label: 'Command' },
-    { id: 'system-prompt', label: 'System' },
     { id: 'clients', label: 'Clients' },
     { id: 'consult', label: 'Consult' },
     { id: 'archive', label: 'Archive' },
-    { id: 'interaction-feed', label: 'Feed' }
+    { id: 'interaction-feed', label: 'Feed' },
+    { id: 'support-chat', label: 'Support' },
+    { id: 'notifications', label: 'HQ Notifications' }
+  ];
+
+  const agencyNavigationItems: { id: AppView, label: string }[] = [
+    { id: 'agency-hq', label: 'Dashboard' },
+    { id: 'agency-database', label: 'Database' },
+    { id: 'agency-messages', label: 'Messages' },
+    { id: 'agency-broadcasts', label: 'Broadcasts' },
+    { id: 'agency-knowledge', label: 'Knowledge Base' },
+    { id: 'agency-prompts', label: 'System Prompts' },
+    { id: 'agency-connectivity', label: 'Connectivity' },
+    { id: 'agency-api-usage', label: 'API Usage' }
   ];
 
   return (
@@ -398,7 +603,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
              {/* Full Navigation Menu - Restricted to Advocate Portal only */}
              {isAdvocatePortal && (
-               <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5 overflow-x-auto no-scrollbar max-w-[70vw]">
+               <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5 overflow-x-auto custom-scrollbar max-w-[70vw] pb-1.5">
                   {navigationItems.map((item) => (
                     <button 
                       key={item.id}
@@ -413,14 +618,42 @@ const App: React.FC = () => {
                   ))}
                </div>
              )}
+
+             {/* Agency HQ Navigation Menu */}
+             {isAgencyPortal && (
+               <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5 overflow-x-auto custom-scrollbar max-w-[70vw] pb-1.5">
+                  {agencyNavigationItems.map((item) => (
+                    <button 
+                      key={item.id}
+                      onClick={() => setView(item.id)}
+                      className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap cursor-pointer select-none ${view === item.id ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+               </div>
+             )}
+
              {view === 'home' && (
                 <h1 className="text-sm font-black text-white uppercase tracking-tighter">
                   Nexus Justice <span className="text-indigo-500">v3.1</span>
                 </h1>
              )}
+             {isAgencyPortal && (
+                <div className="flex items-center gap-4 ml-4">
+                  <button onClick={() => setView('home')} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Back to Hub">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  </button>
+                  <h1 className="text-sm font-black text-white uppercase tracking-tighter">
+                    Agency HQ <span className="text-amber-500">Command</span>
+                  </h1>
+                </div>
+             )}
           </div>
           <Header status={status} />
         </header>
+
+        {/* Notification Slide Bar Removed */}
 
         <main className="flex-1 relative bg-black flex overflow-hidden">
           {isLoading && (
@@ -447,27 +680,1154 @@ const App: React.FC = () => {
                  <div className="max-w-4xl mx-auto w-full pt-10">
                     <h1 className="text-[64px] font-black tracking-tighter italic mb-4 leading-[0.9]">ACCESS HUB</h1>
                     <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-16">Select your role to initialize the Titan interface.</p>
-                    
-                    <div className="space-y-6">
-                       <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60">
-                          <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em]">Master Command</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter">Agency HQ</h2>
-                       </div>
+                                        <div className="space-y-6">
+                        <button 
+                          onClick={() => setView('agency-hq')}
+                          className="w-full text-left group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-amber-500/30 hover:shadow-[0_20px_60px_rgba(245,158,11,0.15)] transform active:scale-[0.99]"
+                        >
+                           <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em]">Master Command</div>
+                           <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-amber-500 transition-colors">Agency HQ</h2>
+                        </button>
 
-                       <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60">
-                          <div className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">Growth & Rewards</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter">Affiliates</h2>
-                       </div>
+                        <div 
+                          onClick={() => setView('affiliates')}
+                          className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-emerald-500/30 hover:shadow-[0_20px_60px_rgba(16,185,129,0.15)] transform active:scale-[0.99] cursor-pointer"
+                        >
+                           <div className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">Growth & Rewards</div>
+                           <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-emerald-500 transition-colors">Affiliates</h2>
+                        </div>
 
-                       <button 
-                         onClick={() => setView('command')}
-                         className="w-full text-left group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(79,70,229,0.15)] transform active:scale-[0.99]"
-                       >
-                          <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em]">Legal Workflow</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Advocate Portal</h2>
-                       </button>
-                    </div>
+                        <div 
+                          onClick={() => setView(currentAdvocateId ? 'command' : 'advocate-signup')}
+                          className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(99,102,241,0.15)] transform active:scale-[0.99] cursor-pointer"
+                        >
+                           <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em]">Legal Workflow</div>
+                           <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Advocate Portal</h2>
+                        </div>
+                     </div>
                  </div>
+              </div>
+            )}
+
+            {view === 'advocate-signup' && (
+              <div className="w-full h-full flex flex-col items-center justify-center p-12 overflow-y-auto custom-scrollbar animate-in fade-in duration-1000 bg-[#02040a]">
+                <div className="w-full max-w-3xl bg-[#0f1423] border border-white/5 rounded-[3rem] p-12 shadow-2xl relative">
+                  <button onClick={() => setView('home')} className="absolute top-8 left-8 p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Back to Hub">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  </button>
+                  <button onClick={() => setView('command')} className="absolute top-8 right-8 p-2 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors flex items-center gap-2" title="Skip (Dev Only)">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Skip (Dev)</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                  </button>
+                  
+                  <div className="flex flex-col items-center mb-10">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                      <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                      </svg>
+                    </div>
+                    <h2 className="text-4xl font-black italic tracking-tighter text-white">
+                      {uplinkStep === 'register' ? 'REGISTER' : 'ADVOCATE'} <span className="text-white/20">UPLINK</span>
+                    </h2>
+                    <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] mt-2 italic">
+                      Neural Legal Infrastructure
+                    </div>
+                  </div>
+
+                  {uplinkStep === 'hardware' && (
+                    <div className="space-y-4 max-w-xl mx-auto">
+                      <div className="flex items-center justify-between bg-[#0a0f1d] border border-white/5 rounded-2xl p-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-slate-600"></div>
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-400">Microphone Node</span>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Standby</span>
+                      </div>
+                      <div className="flex items-center justify-between bg-[#0a0f1d] border border-white/5 rounded-2xl p-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-slate-600"></div>
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-400">Camera Sensors</span>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Standby</span>
+                      </div>
+                      <button 
+                        onClick={() => setUplinkStep('login')}
+                        className="w-full py-5 bg-amber-500 text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-400 shadow-xl shadow-amber-500/20 transition-all mt-8"
+                      >
+                        Authorize Hardware
+                      </button>
+                    </div>
+                  )}
+
+                  {uplinkStep === 'login' && (
+                    <div className="space-y-6 max-w-xl mx-auto">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Advocate Identifier</label>
+                        <input 
+                          type="text" 
+                          value={loginForm.id}
+                          onChange={e => setLoginForm({...loginForm, id: e.target.value})}
+                          className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                          placeholder="Advocate ID / Phone Number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Passphrase</label>
+                        <input 
+                          type="password" 
+                          value={loginForm.passphrase}
+                          onChange={e => setLoginForm({...loginForm, passphrase: e.target.value})}
+                          className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                          placeholder="••••••••"
+                        />
+                      </div>
+                      <div className="flex justify-between items-center pt-2">
+                        <button onClick={() => setUplinkStep('forgot-password')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 italic transition-colors">Forgot Password?</button>
+                        <button onClick={() => setUplinkStep('register')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 italic transition-colors">Create Advocate Node</button>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          if (loginForm.id) {
+                            setCurrentAdvocateId(loginForm.id);
+                            localStorage.setItem('nexus_advocate_id', loginForm.id);
+                            setView('command');
+                          } else {
+                            setError("Please enter your Advocate Identifier.");
+                          }
+                        }}
+                        className="w-full py-5 bg-amber-500 text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-400 shadow-xl shadow-amber-500/20 transition-all mt-4"
+                      >
+                        Establish Link
+                      </button>
+                    </div>
+                  )}
+
+                  {uplinkStep === 'forgot-password' && (
+                    <div className="space-y-6 max-w-xl mx-auto">
+                      <div className="text-center mb-6">
+                        <p className="text-sm text-slate-400">Enter your Advocate ID or Phone Number to reset your passphrase.</p>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Advocate Identifier</label>
+                        <input 
+                          type="text" 
+                          className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                          placeholder="Advocate ID / Phone Number"
+                        />
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setError("Password reset link has been sent to your registered email/phone.");
+                          setTimeout(() => setUplinkStep('login'), 2000);
+                        }}
+                        className="w-full py-5 bg-amber-500 text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-400 shadow-xl shadow-amber-500/20 transition-all mt-4"
+                      >
+                        Send Reset Link
+                      </button>
+                      <div className="text-center pt-4">
+                        <button onClick={() => setUplinkStep('login')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors">Back to Login</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {uplinkStep === 'register' && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Full Professional Name</label>
+                          <input 
+                            type="text" 
+                            value={signupForm.name}
+                            onChange={e => setSignupForm({...signupForm, name: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="Adv. John Doe"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Primary Email Hub</label>
+                          <input 
+                            type="email" 
+                            value={signupForm.email}
+                            onChange={e => setSignupForm({...signupForm, email: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="john@advocate.in"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Direct Contact (Phone)</label>
+                          <input 
+                            type="tel" 
+                            value={signupForm.phone}
+                            onChange={e => setSignupForm({...signupForm, phone: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="+91 0000000000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">District</label>
+                          <input 
+                            type="text" 
+                            value={signupForm.district}
+                            onChange={e => setSignupForm({...signupForm, district: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="e.g. Ernakulam"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Place/Taluk</label>
+                          <input 
+                            type="text" 
+                            value={signupForm.taluk}
+                            onChange={e => setSignupForm({...signupForm, taluk: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="e.g. Aluva"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Court Complex</label>
+                          <input 
+                            type="text" 
+                            value={signupForm.court}
+                            onChange={e => setSignupForm({...signupForm, court: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="High Court / District Court"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Office Domicile Address</label>
+                        <input 
+                          type="text" 
+                          value={signupForm.address}
+                          onChange={e => setSignupForm({...signupForm, address: e.target.value})}
+                          className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                          placeholder="Full address for registry"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Referral Node Code</label>
+                          <input 
+                            type="text" 
+                            value={signupForm.referralCode}
+                            onChange={e => setSignupForm({...signupForm, referralCode: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Create Passphrase</label>
+                          <input 
+                            type="password" 
+                            value={signupForm.passphrase}
+                            onChange={e => setSignupForm({...signupForm, passphrase: e.target.value})}
+                            className="w-full bg-[#0a0f1d] border border-white/5 rounded-xl px-4 py-4 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors" 
+                            placeholder="••••••••"
+                          />
+                        </div>
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          if (!signupForm.name || !signupForm.phone || !signupForm.email || !signupForm.district) {
+                            setError("Please fill in all required fields.");
+                            return;
+                          }
+                          const uniqueId = 'ADV-' + Math.floor(1000 + Math.random() * 9000);
+                          const namePrefix = signupForm.name.substring(0, 3).toUpperCase();
+                          const phoneSuffix = signupForm.phone.slice(-3);
+                          const couponCode = `${namePrefix}-${phoneSuffix}`;
+                          
+                          const newAdvocate: Advocate = {
+                            id: uniqueId,
+                            name: signupForm.name,
+                            phone: signupForm.phone,
+                            email: signupForm.email,
+                            state: 'Kerala',
+                            district: signupForm.district,
+                            subscription: 'Starter',
+                            couponCode: couponCode,
+                            referredBy: signupForm.referralCode || 'None',
+                            joinDate: new Date().toISOString().split('T')[0]
+                          };
+                          
+                          setAdvocates([...advocates, newAdvocate]);
+                          localStorage.setItem('nexus_advocate_id', uniqueId);
+                          setCurrentAdvocateId(uniqueId);
+                          setView('command');
+                        }}
+                        className="w-full py-5 bg-amber-500 text-black rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-400 shadow-xl shadow-amber-500/20 transition-all mt-4"
+                      >
+                        Create Advocate Node
+                      </button>
+                      <div className="text-center pt-4">
+                        <button onClick={() => setUplinkStep('login')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors">Already have a node? Log in</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-database' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div>
+                    <div className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">Master Command</div>
+                    <h3 className="text-6xl font-black tracking-tighter italic">Advocate<span className="text-slate-500 not-italic">Database</span></h3>
+                    <p className="text-slate-400 text-sm mt-4 max-w-2xl">Manage registered advocates, subscriptions, and referral tracking.</p>
+                  </div>
+                  <div className="flex gap-4 items-center">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Search advocates..." 
+                        value={dbSearchQuery}
+                        onChange={(e) => setDbSearchQuery(e.target.value)}
+                        className="w-64 py-3 pl-10 pr-4 bg-[#0a0f1d] border border-white/10 rounded-xl text-[12px] font-medium text-slate-300 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+                      />
+                      <svg className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
+                    <select 
+                      value={dbFilterState}
+                      onChange={e => { setDbFilterState(e.target.value); setDbFilterDistrict(''); }}
+                      className="bg-[#0a0f1d] border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors appearance-none min-w-[160px]"
+                    >
+                      <option value="">All States</option>
+                      {Object.keys(locationData).map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                    <select 
+                      value={dbFilterDistrict}
+                      onChange={e => setDbFilterDistrict(e.target.value)}
+                      disabled={!dbFilterState}
+                      className="bg-[#0a0f1d] border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors appearance-none min-w-[160px] disabled:opacity-50"
+                    >
+                      <option value="">All Districts</option>
+                      {dbFilterState && locationData[dbFilterState as keyof typeof locationData].map(district => (
+                        <option key={district} value={district}>{district}</option>
+                      ))}
+                    </select>
+                    <select 
+                      value={dbFilterPlan}
+                      onChange={e => setDbFilterPlan(e.target.value)}
+                      className="bg-[#0a0f1d] border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors appearance-none min-w-[160px]"
+                    >
+                      <option value="">All Plans</option>
+                      <option value="Starter">Starter</option>
+                      <option value="Pro">Pro</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 shadow-2xl overflow-hidden flex-1 flex flex-col">
+                  <div className="overflow-auto custom-scrollbar flex-1">
+                    <table className="w-full text-left border-collapse min-w-[1000px]">
+                      <thead className="sticky top-0 bg-[#0a0f1d] z-10">
+                        <tr className="border-b border-white/5">
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">ID</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Advocate Name</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Contact</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Location</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Plan</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Coupon Code</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Referred By</th>
+                          <th className="pb-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Join Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm">
+                        {advocates
+                          .filter(adv => !dbFilterState || adv.state === dbFilterState)
+                          .filter(adv => !dbFilterDistrict || adv.district === dbFilterDistrict)
+                          .filter(adv => !dbFilterPlan || adv.subscription === dbFilterPlan)
+                          .filter(adv => {
+                            if (!dbSearchQuery) return true;
+                            const query = dbSearchQuery.toLowerCase();
+                            return (
+                              adv.name.toLowerCase().includes(query) ||
+                              adv.phone.includes(query) ||
+                              adv.email.toLowerCase().includes(query) ||
+                              adv.id.toLowerCase().includes(query) ||
+                              adv.couponCode.toLowerCase().includes(query) ||
+                              adv.referredBy.toLowerCase().includes(query)
+                            );
+                          })
+                          .map((adv) => (
+                          <tr key={adv.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                            <td className="py-4 px-4 font-mono text-xs text-amber-500">{adv.id}</td>
+                            <td className="py-4 px-4 font-bold text-slate-200">{adv.name}</td>
+                            <td className="py-4 px-4 text-slate-400">
+                              <div>{adv.phone}</div>
+                              <div className="text-xs opacity-60">{adv.email}</div>
+                            </td>
+                            <td className="py-4 px-4 text-slate-400">
+                              <div>{adv.district}</div>
+                              <div className="text-xs opacity-60">{adv.state}</div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${adv.subscription === 'Pro' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`}>
+                                {adv.subscription}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 font-mono text-xs text-emerald-400">{adv.couponCode}</td>
+                            <td className="py-4 px-4 font-mono text-xs text-slate-400">{adv.referredBy}</td>
+                            <td className="py-4 px-4 text-slate-400">{adv.joinDate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-hq' && (
+              <div className="w-full h-full p-8 flex gap-8 overflow-hidden">
+                {/* Left Panel: Affiliate List */}
+                <div className="w-[400px] flex flex-col gap-6 shrink-0">
+                  <div className="bg-[#0a0f1d] rounded-[2rem] p-8 border border-white/5 shadow-2xl flex flex-col gap-4">
+                    <div className="text-amber-500 text-[9px] font-black uppercase tracking-[0.4em]">Master Command</div>
+                    <h3 className="text-4xl font-black italic tracking-tighter">Agency<span className="text-slate-500">HQ</span></h3>
+                    
+                    <div className="mt-4 relative">
+                      <input 
+                        type="text" 
+                        placeholder="Search affiliate..." 
+                        value={affiliateSearch}
+                        onChange={(e) => setAffiliateSearch(e.target.value)}
+                        className="w-full py-4 pl-12 pr-4 bg-white/5 border border-white/10 rounded-2xl text-[12px] font-medium text-slate-300 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+                      />
+                      <svg className="w-5 h-5 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 bg-[#0a0f1d] rounded-[2rem] border border-white/5 p-4 flex flex-col shadow-2xl overflow-hidden">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                      {mockAffiliates
+                        .filter(a => a.name.toLowerCase().includes(affiliateSearch.toLowerCase()) || a.phone.includes(affiliateSearch))
+                        .map(affiliate => (
+                        <div 
+                          key={affiliate.id}
+                          onClick={() => setSelectedAffiliateId(affiliate.id)}
+                          className={`p-5 rounded-2xl border cursor-pointer transition-all ${selectedAffiliateId === affiliate.id ? 'bg-amber-600/10 border-amber-500/30' : 'bg-white/2 border-white/5 hover:bg-white/5'}`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className={`text-lg font-black italic tracking-tighter ${selectedAffiliateId === affiliate.id ? 'text-amber-400' : 'text-slate-200'}`}>{affiliate.name}</div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase">{affiliate.subscribers.length} Subs</div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <div className="text-[11px] text-slate-400 font-mono">{affiliate.phone}</div>
+                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-600">{affiliate.code}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel: Subscriber Details */}
+                <div className="flex-1 bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-12 flex flex-col shadow-2xl relative overflow-hidden">
+                  {selectedAffiliateId ? (() => {
+                    const affiliate = mockAffiliates.find(a => a.id === selectedAffiliateId)!;
+                    const trialSubs = affiliate.subscribers.filter(s => s.plan === 'Trial');
+                    const proSubs = affiliate.subscribers.filter(s => s.plan === 'Pro');
+                    
+                    return (
+                      <>
+                        <div className="flex justify-between items-start mb-12">
+                          <div>
+                            <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-2">Affiliate Profile</div>
+                            <h3 className="text-6xl font-black italic tracking-tighter">{affiliate.name}</h3>
+                            <div className="flex gap-4 mt-4">
+                              <span className="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-mono text-slate-400 border border-white/10">{affiliate.phone}</span>
+                              <span className="px-4 py-2 bg-amber-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-400 border border-amber-500/20">Code: {affiliate.code}</span>
+                            </div>
+                          </div>
+                          <div className="text-right flex gap-6">
+                            <div>
+                              <div className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Total Subs</div>
+                              <div className="text-4xl font-black text-white leading-none">{affiliate.subscribers.length}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 flex gap-8 overflow-hidden">
+                          {/* Trial Subscribers */}
+                          <div className="flex-1 flex flex-col bg-white/[0.02] border border-white/5 rounded-[2rem] p-8">
+                            <div className="flex justify-between items-center mb-6">
+                              <h4 className="text-xl font-black italic tracking-tighter text-slate-300">Trial Subscribers</h4>
+                              <span className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold">{trialSubs.length}</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                              {trialSubs.map(sub => (
+                                <div key={sub.id} className="p-4 bg-black/40 rounded-xl border border-white/5 flex justify-between items-center">
+                                  <div>
+                                    <div className="font-bold text-sm text-slate-300">{sub.name}</div>
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Joined: {sub.joinDate}</div>
+                                  </div>
+                                  <div className="px-3 py-1 bg-slate-800 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg">Trial</div>
+                                </div>
+                              ))}
+                              {trialSubs.length === 0 && (
+                                <div className="text-center text-slate-600 text-[10px] font-bold uppercase tracking-widest py-8">No trial subscribers</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Pro Subscribers */}
+                          <div className="flex-1 flex flex-col bg-amber-900/10 border border-amber-500/10 rounded-[2rem] p-8">
+                            <div className="flex justify-between items-center mb-6">
+                              <h4 className="text-xl font-black italic tracking-tighter text-amber-400">Pro Subscribers</h4>
+                              <span className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold">{proSubs.length}</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                              {proSubs.map(sub => (
+                                <div key={sub.id} className="p-4 bg-black/40 rounded-xl border border-amber-500/20 flex justify-between items-center">
+                                  <div>
+                                    <div className="font-bold text-sm text-amber-100">{sub.name}</div>
+                                    <div className="text-[10px] text-amber-500/60 uppercase tracking-widest mt-1">Joined: {sub.joinDate}</div>
+                                  </div>
+                                  <div className="px-3 py-1 bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest rounded-lg shadow-[0_0_10px_rgba(245,158,11,0.3)]">Pro</div>
+                                </div>
+                              ))}
+                              {proSubs.length === 0 && (
+                                <div className="text-center text-amber-500/40 text-[10px] font-bold uppercase tracking-widest py-8">No pro subscribers</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })() : (
+                    <div className="flex-1 flex items-center justify-center text-slate-600 text-[12px] font-bold uppercase tracking-widest">
+                      Select an affiliate to view details
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-messages' && (
+               <div className="w-full h-full flex flex-col bg-[#070b14]">
+                  <div className="p-8 border-b border-white/5 bg-[#0a0f1d] flex items-center justify-between shadow-lg shrink-0">
+                     <div>
+                       <div className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 mb-2">Advocate Communication</div>
+                       <h3 className="text-4xl font-black tracking-tighter italic">Agency<span className="text-slate-500 not-italic">Messages</span></h3>
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-10 space-y-6 custom-scrollbar bg-gradient-to-b from-transparent to-[#020617]/50">
+                     {agencyMessages.map((msg) => (
+                       <div key={msg.id} className={`flex ${msg.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                         <div className={`p-6 rounded-[2rem] text-[14px] leading-relaxed border max-w-[70%] shadow-2xl ${
+                           msg.role === 'admin' 
+                             ? 'bg-amber-600/20 border-amber-500/30 text-amber-100 rounded-br-none' 
+                             : 'bg-white/5 border-white/10 text-slate-300 rounded-bl-none'
+                         }`}>
+                           <div className="text-[9px] font-black uppercase tracking-widest mb-2 opacity-50">
+                             {msg.role === 'admin' ? 'Admin (You)' : 'Advocate'}
+                           </div>
+                           {msg.text}
+                         </div>
+                       </div>
+                     ))}
+                  </div>
+                  <div className="p-8 bg-[#0a0f1d] border-t border-white/5 shrink-0">
+                    <div className="max-w-4xl mx-auto flex gap-4">
+                      <input 
+                        type="text" 
+                        value={agencyMessageInput}
+                        onChange={(e) => setAgencyMessageInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && agencyMessageInput.trim()) {
+                            setAgencyMessages(prev => [...prev, { id: Date.now(), role: 'admin', text: agencyMessageInput }]);
+                            setAgencyMessageInput("");
+                          }
+                        }}
+                        placeholder="Reply to advocates..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                      <button 
+                        onClick={() => {
+                          if (agencyMessageInput.trim()) {
+                            setAgencyMessages(prev => [...prev, { id: Date.now(), role: 'admin', text: agencyMessageInput }]);
+                            setAgencyMessageInput("");
+                          }
+                        }}
+                        disabled={!agencyMessageInput.trim()}
+                        className="px-8 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-amber-600/20"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
+               </div>
+            )}
+
+            {view === 'agency-broadcasts' && (
+               <div className="w-full h-full flex flex-col bg-[#070b14]">
+                  <div className="p-8 border-b border-white/5 bg-[#0a0f1d] flex items-center justify-between shadow-lg shrink-0">
+                     <div>
+                       <div className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 mb-2">Network Wide Communication</div>
+                       <h3 className="text-4xl font-black tracking-tighter italic">Agency<span className="text-slate-500 not-italic">Broadcasts</span></h3>
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar bg-gradient-to-b from-transparent to-[#020617]/50">
+                     
+                     <div className="bg-[#0a0f1d] border border-white/5 rounded-3xl p-8 max-w-4xl mx-auto shadow-2xl">
+                        <h4 className="text-xl font-black italic tracking-tighter mb-6">New Broadcast</h4>
+                        
+                        <div className="space-y-6">
+                           <div>
+                             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Target Audience</label>
+                             <div className="flex gap-4">
+                               {['all', 'payment', 'default', 'specific'].map((cat) => (
+                                 <button 
+                                   key={cat}
+                                   onClick={() => setBroadcastCategory(cat as any)}
+                                   className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${broadcastCategory === cat ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                 >
+                                   {cat === 'all' ? 'All Advocates' : cat === 'payment' ? 'Paid Users' : cat === 'default' ? 'Defaulted Users' : 'Specific ID'}
+                                 </button>
+                               ))}
+                             </div>
+                           </div>
+
+                           {broadcastCategory === 'specific' && (
+                             <div>
+                               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Advocate ID</label>
+                               <input 
+                                 type="text" 
+                                 value={broadcastSpecificId}
+                                 onChange={(e) => setBroadcastSpecificId(e.target.value)}
+                                 placeholder="Enter Advocate ID..."
+                                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 focus:outline-none focus:border-amber-500/50"
+                               />
+                             </div>
+                           )}
+
+                           <div>
+                             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Message Content</label>
+                             <textarea 
+                               value={broadcastInput}
+                               onChange={(e) => setBroadcastInput(e.target.value)}
+                               placeholder="Enter broadcast message..."
+                               className="w-full min-h-[150px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-slate-300 focus:outline-none focus:border-amber-500/50 resize-none custom-scrollbar"
+                             />
+                           </div>
+
+                           <div className="flex justify-end">
+                             <button 
+                               onClick={() => {
+                                 if (!broadcastInput.trim()) return;
+                                 setAdvocateNotifications(prev => [{
+                                   id: Date.now(),
+                                   message: broadcastInput,
+                                   date: new Date().toISOString().split('T')[0],
+                                   read: false,
+                                   type: broadcastCategory === 'payment' ? 'payment' : broadcastCategory === 'default' ? 'default' : 'general'
+                                 }, ...prev]);
+                                 setBroadcastInput("");
+                               }}
+                               disabled={!broadcastInput.trim() || (broadcastCategory === 'specific' && !broadcastSpecificId.trim())}
+                               className="px-8 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-amber-600/20"
+                             >
+                               Send Broadcast
+                             </button>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="max-w-4xl mx-auto">
+                        <h4 className="text-xl font-black italic tracking-tighter mb-6">Recent Broadcasts</h4>
+                        <div className="space-y-4">
+                           {advocateNotifications.map((notif) => (
+                             <div key={notif.id} className="bg-[#0a0f1d] border border-white/5 rounded-2xl p-6 flex gap-6 items-start">
+                               <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                                 <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+                               </div>
+                               <div className="flex-1">
+                                 <div className="flex items-center justify-between mb-2">
+                                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{notif.type} • {notif.date}</div>
+                                 </div>
+                                 <p className="text-sm text-slate-300 leading-relaxed">{notif.message}</p>
+                               </div>
+                             </div>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            {view === 'agency-knowledge' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div>
+                    <div className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">Resource Management</div>
+                    <h3 className="text-6xl font-black tracking-tighter italic">Knowledge<span className="text-slate-500 not-italic">Base</span></h3>
+                  </div>
+                  <button className="px-8 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500 shadow-xl shadow-amber-600/20 transition-all flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Upload Document
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {knowledgeBaseDocs.map(doc => (
+                    <div key={doc.id} className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl hover:bg-white/[0.02] transition-colors group">
+                      <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20 text-amber-500 group-hover:scale-110 transition-transform">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-bold text-slate-200 mb-2">{doc.title}</h4>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Uploaded: {doc.date}</div>
+                      </div>
+                      <div className="mt-auto pt-6 border-t border-white/5 flex gap-4">
+                        <button className="flex-1 py-3 bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors">View</button>
+                        <button className="flex-1 py-3 bg-rose-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-rose-400 hover:bg-rose-500/20 transition-colors">Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-prompts' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div>
+                    <div className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">AI Core Logic</div>
+                    <h3 className="text-6xl font-black tracking-tighter italic">System<span className="text-slate-500 not-italic">Prompts</span></h3>
+                    <p className="text-slate-400 text-sm mt-4 max-w-2xl">Configure the foundational AI behavior for all portals. The Master Admin prompt overrides all other portal prompts.</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem('nexus_admin_prompt', adminSystemPrompt);
+                      localStorage.setItem('nexus_advocate_prompt', advocateSystemPrompt);
+                      localStorage.setItem('nexus_affiliate_prompt', affiliateSystemPrompt);
+                      setIsPromptSaved(true);
+                      setTimeout(() => setIsPromptSaved(false), 3000);
+                    }}
+                    className="px-8 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500 shadow-xl shadow-amber-600/20 transition-all flex items-center gap-2"
+                  >
+                    {isPromptSaved ? 'Saved Successfully' : 'Save All Prompts'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Admin Prompt */}
+                  <div className="bg-[#0a0f1d] border border-amber-500/30 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[50px] rounded-full" />
+                    <div>
+                      <h4 className="text-2xl font-black italic tracking-tighter text-amber-400">Master Admin Prompt</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">Highest Priority - Overrides all others</p>
+                    </div>
+                    <textarea 
+                      value={adminSystemPrompt}
+                      onChange={(e) => setAdminSystemPrompt(e.target.value)}
+                      className="flex-1 w-full min-h-[300px] bg-black/40 border border-white/10 rounded-2xl p-6 text-sm leading-relaxed text-slate-300 focus:outline-none focus:border-amber-500/50 resize-none custom-scrollbar"
+                    />
+                  </div>
+
+                  {/* Advocate Prompt */}
+                  <div className="bg-[#0a0f1d] border border-indigo-500/30 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full" />
+                    <div>
+                      <h4 className="text-2xl font-black italic tracking-tighter text-indigo-400">Advocate Portal Prompt</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">Must obey Master Admin Prompt</p>
+                    </div>
+                    <textarea 
+                      value={advocateSystemPrompt}
+                      onChange={(e) => setAdvocateSystemPrompt(e.target.value)}
+                      className="flex-1 w-full min-h-[300px] bg-black/40 border border-white/10 rounded-2xl p-6 text-sm leading-relaxed text-slate-300 focus:outline-none focus:border-indigo-500/50 resize-none custom-scrollbar"
+                    />
+                  </div>
+
+                  {/* Affiliate Prompt */}
+                  <div className="bg-[#0a0f1d] border border-emerald-500/30 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[50px] rounded-full" />
+                    <div>
+                      <h4 className="text-2xl font-black italic tracking-tighter text-emerald-400">Affiliate Portal Prompt</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">Manages payments and onboarding</p>
+                    </div>
+                    <textarea 
+                      value={affiliateSystemPrompt}
+                      onChange={(e) => setAffiliateSystemPrompt(e.target.value)}
+                      className="flex-1 w-full min-h-[300px] bg-black/40 border border-white/10 rounded-2xl p-6 text-sm leading-relaxed text-slate-300 focus:outline-none focus:border-emerald-500/50 resize-none custom-scrollbar"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-connectivity' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div>
+                    <div className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">External Integrations</div>
+                    <h3 className="text-6xl font-black tracking-tighter italic">Connectivity<span className="text-slate-500 not-italic">Settings</span></h3>
+                    <p className="text-slate-400 text-sm mt-4 max-w-2xl">Manage API keys, webhooks, and third-party provider credentials.</p>
+                  </div>
+                  <button className="px-8 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500 shadow-xl shadow-amber-600/20 transition-all">
+                    Save Configuration
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Telephone Provider */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center border border-blue-500/20 text-blue-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">Telephone Provider</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Twilio / Plivo Integration</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">API Key / Account SID</label>
+                        <input type="password" value="************************" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">API Secret / Auth Token</label>
+                        <input type="password" value="************************" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp API */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center border border-emerald-500/20 text-emerald-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">WhatsApp API</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Business Integration</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Access Token</label>
+                        <input type="password" value="************************" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Phone Number ID</label>
+                        <input type="text" value="104857392018475" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Webhooks */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl lg:col-span-2">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center border border-purple-500/20 text-purple-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">App Webhooks</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Event Callbacks</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Primary Webhook URL</label>
+                        <div className="flex gap-4">
+                          <input type="text" value="https://api.nexus.justice/v1/webhook/events" readOnly className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                          <button className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10 transition-colors">Copy</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Razorpay Integration */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl lg:col-span-2">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center border border-blue-500/20 text-blue-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">Razorpay</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Payment Gateway Integration</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Key ID</label>
+                        <input type="password" value="************************" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Key Secret</label>
+                        <input type="password" value="************************" readOnly className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 font-mono focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {view === 'agency-api-usage' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div>
+                    <div className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">System Orchestration</div>
+                    <h3 className="text-6xl font-black tracking-tighter italic">API<span className="text-slate-500 not-italic">Usage & Health</span></h3>
+                    <p className="text-slate-400 text-sm mt-4 max-w-2xl">Monitor provider health and usage. Gemini acts as the Orchestrator and Legacy Fallback.</p>
+                  </div>
+                  <div className="flex items-center gap-3 px-6 py-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">1 Provider Offline</span>
+                  </div>
+                </div>
+
+                {/* System Status Alert */}
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-[2rem] p-6 flex items-start gap-6 shadow-2xl">
+                   <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center border border-rose-500/30 text-rose-500 shrink-0">
+                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                   </div>
+                   <div className="flex-1">
+                     <h4 className="text-xl font-black italic tracking-tighter text-rose-400">Degraded Performance</h4>
+                     <p className="text-sm text-rose-300/80 mt-1">1 service provider (<span className="font-bold text-rose-200">Legacy SMS</span>) is currently offline. Gemini Orchestrator has successfully taken over routing for the affected services.</p>
+                     
+                     <div className="mt-4 flex flex-col gap-2">
+                       <div className="bg-black/40 border border-rose-500/20 rounded-xl p-4 flex justify-between items-center">
+                         <div>
+                           <div className="font-bold text-rose-200">Legacy SMS (Notification Service)</div>
+                           <div className="text-xs text-rose-400/80 mt-1">Stopped at: 2026-02-24 03:45:12 PST</div>
+                         </div>
+                         <div className="text-right">
+                           <div className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-1">Status</div>
+                           <div className="text-rose-400 font-bold text-sm flex items-center gap-2 justify-end">
+                             <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" /> Offline
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Gemini Orchestrator */}
+                  <div className="bg-[#0a0f1d] border border-indigo-500/30 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl relative overflow-hidden lg:col-span-3">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] rounded-full" />
+                    <div className="flex justify-between items-start relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20 text-indigo-400">
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                        </div>
+                        <div>
+                          <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.4em] mb-1">Orchestrator & Legacy Fallback</div>
+                          <h4 className="text-3xl font-black italic tracking-tighter text-slate-200">Gemini AI</h4>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Status</div>
+                        <div className="text-emerald-400 font-bold text-sm flex items-center gap-2 justify-end">
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full" /> Active
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Environment Variable</div>
+                        <code className="text-indigo-400 font-mono text-xs">VITE_GEMINI_API_KEY</code>
+                      </div>
+                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Tokens Processed (24h)</div>
+                        <div className="text-2xl font-black text-slate-200">1.2M</div>
+                      </div>
+                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Fallback Interventions</div>
+                        <div className="text-2xl font-black text-slate-200">0</div>
+                        <div className="text-[9px] text-slate-500 mt-1">No provider crashes detected</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* LiveKit */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">LiveKit</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Real-time Voice/Video</p>
+                      </div>
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full" title="Active" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">URL</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_LIVEKIT_URL</code>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_LIVEKIT_API_KEY</code>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Secret</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_LIVEKIT_API_SECRET</code>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Usage (24h)</div>
+                      <div className="text-xl font-black text-slate-200">4,250 mins</div>
+                    </div>
+                  </div>
+
+                  {/* MongoDB */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">MongoDB</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Database Storage</p>
+                      </div>
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full" title="Active" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">URL</span>
+                        <code className="text-slate-400 font-mono text-[10px]">MONGODB_URL</code>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Auth</span>
+                        <code className="text-slate-400 font-mono text-[10px]">User/Password</code>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Usage (24h)</div>
+                      <div className="text-xl font-black text-slate-200">1.2 GB Read/Write</div>
+                    </div>
+                  </div>
+
+                  {/* Sarvam */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">Sarvam</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Indian Languages Voice/Text</p>
+                      </div>
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full" title="Active" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_SARVAM_API_KEY</code>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Usage (24h)</div>
+                      <div className="text-xl font-black text-slate-200">450K Chars / 120 mins</div>
+                    </div>
+                  </div>
+
+                  {/* Serper.dev */}
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">Serper.dev</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Web Search</p>
+                      </div>
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full" title="Active" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_SERPER_API_KEY</code>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Usage (24h)</div>
+                      <div className="text-xl font-black text-slate-200">12,500 Queries</div>
+                    </div>
+                  </div>
+
+                  {/* Legacy SMS (Simulated Crash) */}
+                  <div className="bg-[#0a0f1d] border border-rose-500/30 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 blur-[40px] rounded-full" />
+                    <div className="flex justify-between items-start relative z-10">
+                      <div>
+                        <h4 className="text-2xl font-black italic tracking-tighter text-slate-200">Legacy SMS</h4>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Notification Service</p>
+                      </div>
+                      <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" title="Offline" />
+                    </div>
+                    <div className="space-y-3 relative z-10">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</span>
+                        <code className="text-slate-400 font-mono text-[10px]">VITE_SMS_API_KEY</code>
+                      </div>
+                    </div>
+                    <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 relative z-10 mt-2">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-1">Crash Detected</div>
+                      <div className="text-sm text-rose-200 font-medium">Time: 2026-02-24 03:45:12</div>
+                      <div className="text-xs text-rose-300/80 mt-1">Duration: 1h 39m (Ongoing)</div>
+                      <div className="text-xs text-rose-300/80 mt-1">Reason: Connection timeout to provider gateway.</div>
+                    </div>
+                    <div className="mt-auto pt-4 relative z-10">
+                      <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        Gemini Orchestrator took over routing.
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {view === 'affiliates' && (
+              <div className="w-full h-full p-12 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-end shrink-0">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setView('home')} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" title="Back to Hub">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    </button>
+                    <div>
+                      <div className="text-emerald-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3 italic">Growth & Rewards Portal</div>
+                      <h3 className="text-6xl font-black tracking-tighter italic">Affiliates<span className="text-slate-500 not-italic">Network</span></h3>
+                    </div>
+                  </div>
+                  <button className="px-8 py-4 bg-emerald-600 text-black rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-500 shadow-xl shadow-emerald-600/20 transition-all">
+                    Register New Partner
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="bg-gradient-to-br from-emerald-600/20 to-transparent border border-emerald-500/20 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl">
+                    <h4 className="text-2xl font-black italic tracking-tighter">Your Rewards</h4>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-6xl font-black">4,250</span>
+                      <span className="text-emerald-500 font-black uppercase tracking-widest text-xs">Credits</span>
+                    </div>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      You are in the top 5% of our affiliate network. Keep referring to unlock the "Titan" tier rewards.
+                    </p>
+                    <button className="mt-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:bg-white/10 transition-all">
+                      Redeem Credits
+                    </button>
+                  </div>
+
+                  <div className="bg-[#0a0f1d] border border-white/5 rounded-[3rem] p-10 flex flex-col gap-6 shadow-2xl">
+                    <h4 className="text-2xl font-black italic tracking-tighter">Referral Link</h4>
+                    <div className="bg-black/40 p-6 rounded-2xl border border-white/5 flex items-center justify-between group cursor-pointer hover:border-emerald-500/30 transition-all">
+                      <code className="text-emerald-500 font-mono text-sm">nexus.justice/ref/adv-992</code>
+                      <svg className="w-5 h-5 text-slate-600 group-hover:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
+                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Total Clicks</div>
+                        <div className="text-2xl font-black">12,402</div>
+                      </div>
+                      <div className="p-4 bg-white/2 rounded-2xl border border-white/5">
+                        <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Conversions</div>
+                        <div className="text-2xl font-black">842</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -492,14 +1852,6 @@ const App: React.FC = () => {
                        </div>
                     </div>
 
-                    <div className="bg-indigo-600 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-4 shadow-2xl shadow-indigo-600/20 flex-1 group cursor-pointer hover:scale-[1.02] transition-transform">
-                       <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center border border-white/20 mb-2">
-                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                       </div>
-                       <h4 className="text-xl font-black uppercase tracking-widest leading-none">Direct Agent Consultation</h4>
-                       <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Internal Voice Link</p>
-                    </div>
-
                     <div className="bg-white/2 border border-white/5 rounded-[2rem] p-6 flex items-center gap-4">
                        <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                        <div>
@@ -511,48 +1863,43 @@ const App: React.FC = () => {
 
                  {/* Right Panel: Voice Ledger */}
                  <div className="flex-1 bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-12 flex flex-col shadow-2xl relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-12">
+                    <div className="flex justify-between items-start mb-8">
                        <div>
                           <h3 className="text-6xl font-black italic tracking-tighter">Voice<span className="text-slate-800">Ledger</span></h3>
-                          <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-2">Scroll through practice records. Select a case to briefing Gemini.</p>
+                          <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-2">Call History & Transcripts</p>
                        </div>
                        <div className="text-right">
-                          <div className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Active Records</div>
-                          <div className="text-4xl font-black text-amber-500 leading-none">1</div>
+                          <div className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Total Calls</div>
+                          <div className="text-4xl font-black text-amber-500 leading-none">3</div>
                        </div>
                     </div>
 
-                    <div className="flex-1 bg-white/[0.03] border border-white/5 rounded-[3rem] p-10 flex flex-col justify-between group shadow-inner">
-                       <div className="flex justify-between items-start">
-                          <div>
-                             <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">Session ID: H01</div>
-                             <h2 className="text-5xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Sreedharan K.</h2>
-                          </div>
-                          <div className="text-right">
-                             <div className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">16/02/2026</div>
-                             <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">3m 4s</div>
-                          </div>
-                       </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-4">
+                       {[
+                         { id: 'H01', client: 'Sreedharan K.', date: '16/02/2026', duration: '3m 4s', summary: 'Property boundary dispute in Aluva. Neighbor is encroaching via new fence construction. Needs interim injunction against further work.' },
+                         { id: 'H02', client: 'Elena Rodriguez', date: '15/02/2026', duration: '12m 15s', summary: 'Initial consultation regarding intellectual property theft. Competitor launched identical product features. Requested cease and desist draft.' },
+                         { id: 'H03', client: 'Marcus Thorne', date: '10/02/2026', duration: '8m 42s', summary: 'Follow-up on real estate fraud case. Provided new evidence documents. Scheduled next court appearance strategy session.' }
+                       ].map((record) => (
+                         <div key={record.id} className="bg-white/[0.03] border border-white/5 rounded-[2rem] p-8 flex flex-col group shadow-inner hover:bg-white/[0.05] transition-all cursor-pointer">
+                            <div className="flex justify-between items-start mb-4">
+                               <div>
+                                  <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-2">Session ID: {record.id}</div>
+                                  <h2 className="text-3xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">{record.client}</h2>
+                               </div>
+                               <div className="text-right flex flex-col items-end gap-1">
+                                  <div className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-widest">{record.date}</div>
+                                  <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{record.duration}</div>
+                               </div>
+                            </div>
 
-                       <div className="bg-black/40 rounded-[2rem] p-10 border border-white/5 mb-8">
-                          <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.4em] mb-4">Summary:</div>
-                          <p className="text-lg font-medium text-slate-400 leading-relaxed italic">
-                             "Property boundary dispute in Aluva. Neighbor is encroaching via new fence construction. Needs interim injunction against further work."
-                          </p>
-                       </div>
-
-                       <div className="flex gap-4">
-                          <button className="flex-1 py-5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:bg-white/10 transition-all">
-                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" /></svg>
-                             Discuss Case
-                          </button>
-                          <button className="flex-1 py-5 bg-emerald-600 rounded-2xl flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-[0.2em] text-black shadow-xl shadow-emerald-600/20 hover:bg-emerald-500 transition-all">
-                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                             Draft Petition
-                          </button>
-                       </div>
-                       
-                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-32 bg-slate-800/30 rounded-l-full" />
+                            <div className="bg-black/40 rounded-xl p-6 border border-white/5">
+                               <div className="text-indigo-400 text-[9px] font-black uppercase tracking-[0.4em] mb-2">Transcript Summary:</div>
+                               <p className="text-sm font-medium text-slate-400 leading-relaxed italic">
+                                  "{record.summary}"
+                               </p>
+                            </div>
+                         </div>
+                       ))}
                     </div>
                  </div>
               </div>
@@ -582,45 +1929,150 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {view === 'system-prompt' && (
-              <div className="w-full h-full flex flex-col p-12 overflow-hidden bg-[#020617] relative">
-                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
-                 <div className="z-10 flex flex-col h-full max-w-5xl mx-auto w-full">
-                    <div className="flex justify-between items-end mb-12">
-                      <div>
-                        <div className="text-[11px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-3 italic">AI Core Logic</div>
-                        <h3 className="text-5xl font-black tracking-tighter">System<span className="text-slate-500">Prompt</span></h3>
-                      </div>
-                      <div className="flex gap-4">
-                        {isPromptSaved && (
-                          <div className="flex items-center gap-2 text-emerald-500 animate-in fade-in slide-in-from-right-4">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                            <span className="text-[10px] font-black uppercase tracking-widest">Logic Updated</span>
-                          </div>
-                        )}
-                        <button 
-                          onClick={saveSystemPrompt}
-                          className="px-10 py-4 bg-indigo-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl shadow-indigo-600/30 hover:bg-indigo-500 transition-all transform active:scale-95"
-                        >
-                          Save Logic Core
-                        </button>
-                      </div>
-                    </div>
+            {view === 'notifications' && (
+               <div className="w-full h-full flex flex-col bg-[#070b14]">
+                  <div className="p-8 border-b border-white/5 bg-[#0a0f1d] flex items-center justify-between shadow-lg shrink-0">
+                     <div>
+                       <div className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-500 mb-2">Network Wide Communication</div>
+                       <h3 className="text-4xl font-black tracking-tighter italic">HQ<span className="text-slate-500 not-italic">Notifications</span></h3>
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-10 space-y-6 custom-scrollbar bg-gradient-to-b from-transparent to-[#020617]/50">
+                     <div className="max-w-4xl mx-auto space-y-6">
+                        
+                        {/* Static Links Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                           <div 
+                             onClick={() => setView('affiliates')}
+                             className="bg-gradient-to-br from-emerald-900/40 to-[#0a0f1d] border border-emerald-500/30 rounded-2xl p-6 cursor-pointer hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all group"
+                           >
+                              <div className="flex items-center gap-4 mb-4">
+                                 <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/30 transition-colors">
+                                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                 </div>
+                                 <div>
+                                    <h4 className="text-lg font-black italic tracking-tighter text-emerald-500">Affiliate Portal</h4>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">View Network & Earnings</div>
+                                 </div>
+                              </div>
+                              <p className="text-sm text-slate-300 leading-relaxed">
+                                 Access your complete list of referred advocates. View their phone numbers, emails, and subscription status (paid/pending). Download your detailed payment history as a CSV file.
+                              </p>
+                           </div>
 
-                    <div className="flex-1 bg-[#0a0f1d] border border-white/5 rounded-[3rem] p-10 shadow-inner flex flex-col relative group">
-                      <textarea 
-                         value={tempPrompt}
-                         onChange={(e) => setTempPrompt(e.target.value)}
-                         className="flex-1 w-full bg-transparent border-none outline-none resize-none text-[15px] leading-relaxed text-slate-300 font-medium pt-10 px-2"
-                         placeholder="Define the duties and personality of the AI agent..."
+                           <div className="bg-gradient-to-br from-indigo-900/40 to-[#0a0f1d] border border-indigo-500/30 rounded-2xl p-6">
+                              <div className="flex items-center gap-4 mb-4">
+                                 <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
+                                    <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                 </div>
+                                 <div>
+                                    <h4 className="text-lg font-black italic tracking-tighter text-indigo-400">Your Referral Link</h4>
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Share & Earn Commission</div>
+                                 </div>
+                              </div>
+                              <p className="text-sm text-slate-300 leading-relaxed mb-4">
+                                 Distribute this link through your social media channels. When someone signs up using it, your coupon code is automatically embedded, and you earn a commission!
+                              </p>
+                              <div className="bg-black/40 p-3 rounded-xl border border-white/10 flex items-center justify-between group cursor-pointer hover:border-indigo-500/50 transition-all" onClick={() => {
+                                 navigator.clipboard.writeText(`nexus.justice/ref/${currentAdvocateId || 'adv-992'}`);
+                                 // Could add a toast notification here
+                              }}>
+                                 <code className="text-indigo-400 font-mono text-xs truncate">nexus.justice/ref/{currentAdvocateId || 'adv-992'}</code>
+                                 <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-indigo-400 transition-colors">Copy</span>
+                                    <svg className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent my-8"></div>
+
+                        {advocateNotifications.length === 0 ? (
+                          <div className="text-center py-20 text-slate-500 font-medium">
+                            No notifications from HQ at this time.
+                          </div>
+                        ) : (
+                          advocateNotifications.map((notif) => (
+                            <div key={notif.id} className={`bg-[#0a0f1d] border ${notif.read ? 'border-white/5 opacity-70' : 'border-indigo-500/30 shadow-lg shadow-indigo-500/10'} rounded-2xl p-6 flex gap-6 items-start transition-all`}>
+                              <div className={`w-10 h-10 rounded-full ${notif.read ? 'bg-white/5' : 'bg-indigo-500/20'} flex items-center justify-center shrink-0`}>
+                                <svg className={`w-5 h-5 ${notif.read ? 'text-slate-500' : 'text-indigo-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                    {notif.type} • {notif.date}
+                                  </div>
+                                  {!notif.read && (
+                                    <button 
+                                      onClick={() => setAdvocateNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))}
+                                      className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 hover:text-indigo-300 transition-colors"
+                                    >
+                                      Mark as read
+                                    </button>
+                                  )}
+                                </div>
+                                <p className={`text-sm leading-relaxed ${notif.read ? 'text-slate-400' : 'text-slate-200'}`}>{notif.message}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            {view === 'support-chat' && (
+               <div className="w-full h-full flex flex-col bg-[#070b14]">
+                  <div className="p-8 border-b border-white/5 bg-[#0a0f1d] flex items-center justify-between shadow-lg shrink-0">
+                     <div>
+                       <div className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Admin Communication</div>
+                       <h3 className="text-4xl font-black tracking-tighter italic">Support<span className="text-slate-500 not-italic">Chat</span></h3>
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-10 space-y-6 custom-scrollbar bg-gradient-to-b from-transparent to-[#020617]/50">
+                     {supportMessages.map((msg) => (
+                       <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                         <div className={`p-6 rounded-[2rem] text-[14px] leading-relaxed border max-w-[70%] shadow-2xl ${
+                           msg.role === 'user' 
+                             ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-100 rounded-br-none' 
+                             : 'bg-white/5 border-white/10 text-slate-300 rounded-bl-none'
+                         }`}>
+                           <div className="text-[9px] font-black uppercase tracking-widest mb-2 opacity-50">
+                             {msg.role === 'user' ? 'You' : 'Nexus AI Support'}
+                           </div>
+                           {msg.text}
+                         </div>
+                       </div>
+                     ))}
+                     {isSendingSupport && (
+                       <div className="flex justify-start">
+                         <div className="p-6 rounded-[2rem] bg-white/5 border border-white/10 text-slate-400 rounded-bl-none animate-pulse text-sm">
+                           Analyzing issue and generating solution...
+                         </div>
+                       </div>
+                     )}
+                  </div>
+                  <div className="p-8 bg-[#0a0f1d] border-t border-white/5 shrink-0">
+                    <div className="max-w-4xl mx-auto flex gap-4">
+                      <input 
+                        type="text" 
+                        value={supportInput}
+                        onChange={(e) => setSupportInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendSupportMessage()}
+                        placeholder="Describe your issue to the Admin Portal..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
                       />
-                      <div className="mt-8 pt-8 border-t border-white/5 flex justify-between items-center text-[9px] font-black text-slate-600 uppercase tracking-widest">
-                         <div>Tokens: {tempPrompt.length}</div>
-                         <button onClick={() => setTempPrompt(DEFAULT_SYSTEM_PROMPT)} className="hover:text-indigo-400 transition-colors">Reset to Default</button>
-                      </div>
+                      <button 
+                        onClick={handleSendSupportMessage}
+                        disabled={isSendingSupport || !supportInput.trim()}
+                        className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-indigo-600/20"
+                      >
+                        Send
+                      </button>
                     </div>
-                 </div>
-              </div>
+                  </div>
+               </div>
             )}
 
             {view === 'toolbox' && (
@@ -686,23 +2138,101 @@ const App: React.FC = () => {
             )}
 
             {view === 'clients' && (
-              <div className="w-full h-full p-12 flex flex-col gap-10">
+              <div className="w-full h-full p-12 flex flex-col gap-10 relative">
                 <div className="flex justify-between items-end shrink-0">
                   <h3 className="text-5xl font-black tracking-tighter italic">Client<span className="text-slate-500 not-italic">Database</span></h3>
+                  <button 
+                    onClick={() => setIsAddingClient(true)}
+                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-500 shadow-xl shadow-indigo-600/20 transition-all flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                    Add New Client
+                  </button>
                 </div>
+                
+                {isAddingClient && (
+                  <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8 animate-in fade-in">
+                    <div className="bg-[#0a0f1d] border border-white/10 rounded-[3rem] p-10 w-full max-w-3xl shadow-2xl flex flex-col gap-8">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-3xl font-black italic tracking-tighter">New<span className="text-slate-500 not-italic">Client</span></h4>
+                        <button onClick={() => setIsAddingClient(false)} className="text-slate-500 hover:text-white transition-colors">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Name of Client *</label>
+                          <input type="text" value={newClient.name || ''} onChange={e => setNewClient({...newClient, name: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="John Doe" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Phone Number *</label>
+                          <input type="text" value={newClient.phone || ''} onChange={e => setNewClient({...newClient, phone: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="+1 555-0000" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Name of Court</label>
+                          <input type="text" value={newClient.courtName || ''} onChange={e => setNewClient({...newClient, courtName: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="District Court" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Case Number</label>
+                          <input type="text" value={newClient.caseNumber || ''} onChange={e => setNewClient({...newClient, caseNumber: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="OS 123/2026" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Opp. Advocate's Name</label>
+                          <input type="text" value={newClient.oppAdvocateName || ''} onChange={e => setNewClient({...newClient, oppAdvocateName: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Jane Smith" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Opp. Advocate's Phone</label>
+                          <input type="text" value={newClient.oppAdvocatePhone || ''} onChange={e => setNewClient({...newClient, oppAdvocatePhone: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="+1 555-1111" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Next Posting Date</label>
+                          <input type="date" value={newClient.nextPostingDate || ''} onChange={e => setNewClient({...newClient, nextPostingDate: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Purpose of Posting</label>
+                          <input type="text" value={newClient.purposeOfPosting || ''} onChange={e => setNewClient({...newClient, purposeOfPosting: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Hearing" />
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-4 mt-4">
+                        <button onClick={() => setIsAddingClient(false)} className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Cancel</button>
+                        <button onClick={handleAddClient} className="px-8 py-3 bg-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all">Save Client</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex-1 bg-[#0a0f1d] rounded-[3rem] border border-white/5 overflow-hidden flex flex-col shadow-2xl">
                   {/* Table Headers */}
-                  <div className="grid grid-cols-12 gap-6 px-12 py-8 border-b border-white/5 bg-white/2 shrink-0">
-                    <div className="col-span-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Client Identity</div>
-                    <div className="col-span-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Legal Matter</div>
-                    <div className="col-span-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Last Interaction</div>
+                  <div className="grid grid-cols-12 gap-4 px-8 py-6 border-b border-white/5 bg-white/2 shrink-0">
+                    <div className="col-span-1 text-[9px] font-black text-slate-500 uppercase tracking-widest">Sl No</div>
+                    <div className="col-span-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Client Details</div>
+                    <div className="col-span-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Court & Case</div>
+                    <div className="col-span-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Opp. Advocate</div>
+                    <div className="col-span-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Next Posting</div>
+                    <div className="col-span-2 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Purpose</div>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {clients.map((client) => (
-                      <div key={client.id} className="grid grid-cols-12 gap-6 px-12 py-8 border-b border-white/5 hover:bg-white/[0.04] transition-all group cursor-pointer">
-                        <div className="col-span-4 font-black text-[16px] group-hover:text-indigo-300 transition-colors uppercase italic tracking-tighter">{client.name}</div>
-                        <div className="col-span-4 text-[12px] text-slate-400">{client.caseType}</div>
-                        <div className="col-span-4 text-right text-[11px] text-slate-600 uppercase font-bold">{client.lastInteraction}</div>
+                      <div key={client.slNo} className="grid grid-cols-12 gap-4 px-8 py-6 border-b border-white/5 hover:bg-white/[0.04] transition-all group cursor-pointer items-center">
+                        <div className="col-span-1 font-black text-[14px] text-slate-600">{client.slNo}</div>
+                        <div className="col-span-2 flex flex-col">
+                          <span className="font-black text-[14px] group-hover:text-indigo-300 transition-colors uppercase italic tracking-tighter">{client.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono mt-1">{client.phone}</span>
+                        </div>
+                        <div className="col-span-2 flex flex-col">
+                          <span className="text-[12px] text-slate-300 font-bold">{client.courtName}</span>
+                          <span className="text-[10px] text-indigo-400 font-mono mt-1">{client.caseNumber}</span>
+                        </div>
+                        <div className="col-span-3 flex flex-col">
+                          <span className="text-[12px] text-slate-300">{client.oppAdvocateName}</span>
+                          <span className="text-[10px] text-slate-500 font-mono mt-1">{client.oppAdvocatePhone}</span>
+                        </div>
+                        <div className="col-span-2 flex flex-col">
+                          <span className="text-[12px] text-emerald-400 font-bold">{client.nextPostingDate}</span>
+                        </div>
+                        <div className="col-span-2 text-right text-[11px] text-slate-400 font-medium">{client.purposeOfPosting}</div>
                       </div>
                     ))}
                   </div>
@@ -814,9 +2344,10 @@ const App: React.FC = () => {
         @keyframes scan { 0% { transform: translateY(0); } 100% { transform: translateY(100vh); } }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #312e81; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4338ca; }
         * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </div>
