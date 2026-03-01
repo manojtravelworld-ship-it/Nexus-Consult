@@ -2186,7 +2186,7 @@ const App: React.FC = () => {
                        </div>
                      )}
                   </div>
-                  <div className="p-8 bg-[#0a0f1d] border-t border-white/5 shrink-0">
+                  <div className="p-8 pb-32 bg-[#0a0f1d] border-t border-white/5 shrink-0">
                     <div className="max-w-4xl mx-auto flex gap-4">
                       <input 
                         type="text" 
