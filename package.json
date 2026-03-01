@@ -4,18 +4,29 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "vite build",
     "lint": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server.ts"
   },
   "dependencies": {
-    "react-dom": "^19.2.4",
-    "react": "^19.2.4",
     "@google/genai": "^1.39.0",
-    "jspdf": "2.5.1"
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jspdf": "2.5.1",
+    "mongoose": "^9.2.3",
+    "multer": "^2.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",

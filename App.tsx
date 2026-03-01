@@ -364,68 +364,109 @@ const App: React.FC = () => {
   };
 
   const startAiSession = async (mediaStream: MediaStream) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-      setStatus(ConnectionStatus.CONNECTING);
-      const session = await ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: systemPrompt 
-        },
-        callbacks: {
-          onopen: () => setStatus(ConnectionStatus.CONNECTED),
-          onmessage: async (msg: LiveServerMessage) => {
-            const base64Audio = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-            if (base64Audio) {
-              if (!outputAudioContextRef.current) outputAudioContextRef.current = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
-              const ctx = outputAudioContextRef.current;
-              nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-              const buffer = await decodeAudioData(decode(base64Audio), ctx);
-              const source = ctx.createBufferSource();
-              source.buffer = buffer;
-              source.connect(ctx.destination);
-              source.start(nextStartTimeRef.current);
-              nextStartTimeRef.current += buffer.duration;
-              sourcesRef.current.add(source);
-            }
-            if (msg.serverContent?.inputTranscription) setUserTranscription(prev => (prev + " " + msg.serverContent!.inputTranscription!.text).trim());
-            if (msg.serverContent?.outputTranscription) setAiTranscription(prev => (prev + " " + msg.serverContent!.outputTranscription!.text).trim());
-            if (msg.serverContent?.turnComplete) {
-              setHistory(prev => [...prev, {role: 'user', text: userTranscription || "...", id: Date.now()}, {role: 'ai', text: aiTranscription || "...", id: Date.now() + 1}].slice(-100));
-              setUserTranscription("");
-              setAiTranscription("");
-            }
-          },
-          onerror: (e) => setStatus(ConnectionStatus.ERROR),
-          onclose: () => setStatus(ConnectionStatus.DISCONNECTED)
-        }
-      });
-      sessionRef.current = session;
-
+      setStatus(ConnectionStatus.CONNECTED);
+      
       const audioCtx = new AudioContext({ sampleRate: INPUT_SAMPLE_RATE });
       const source = audioCtx.createMediaStreamSource(mediaStream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       const analyser = audioCtx.createAnalyser();
       source.connect(analyser);
       
-      processor.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) pcm[i] = input[i] * 32767;
-        session.sendRealtimeInput({ media: { data: encode(new Uint8Array(pcm.buffer)), mimeType: 'audio/pcm;rate=16000' } });
-        
+      const updateMicLevel = () => {
+        if (!micEnabledRef.current) return;
         const data = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(data);
         setMicLevel(data.reduce((a, b) => a + b, 0) / data.length / 128);
+        requestAnimationFrame(updateMicLevel);
+      };
+      updateMicLevel();
+      audioContextRef.current = audioCtx;
+
+      // Custom recording logic
+      const mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+      let audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
       };
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-      audioContextRef.current = audioCtx;
+      mediaRecorder.onstop = async () => {
+        if (audioChunks.length === 0) return;
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        audioChunks = [];
+        
+        try {
+          // 1. STT
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'recording.webm');
+          const sttRes = await fetch('/api/stt', { method: 'POST', body: formData });
+          const sttData = await sttRes.json();
+          const userText = sttData.transcript;
+          
+          if (!userText) {
+            mediaRecorder.start();
+            return;
+          }
+          
+          setUserTranscription(userText);
+          
+          // 2. Chat
+          const chatRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userText, useWebSearch: false })
+          });
+          const chatData = await chatRes.json();
+          const aiText = chatData.reply;
+          
+          setAiTranscription(aiText);
+          setHistory(prev => [...prev, {role: 'user', text: userText, id: Date.now()}, {role: 'ai', text: aiText, id: Date.now() + 1}].slice(-100));
+          
+          // 3. TTS
+          const ttsRes = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: aiText })
+          });
+          const ttsData = await ttsRes.json();
+          
+          if (ttsData.audio) {
+            if (!outputAudioContextRef.current) outputAudioContextRef.current = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
+            const ctx = outputAudioContextRef.current;
+            const buffer = await decodeAudioData(decode(ttsData.audio), ctx);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start(0);
+            source.onended = () => {
+              if (micEnabledRef.current) mediaRecorder.start();
+            };
+          } else {
+            if (micEnabledRef.current) mediaRecorder.start();
+          }
+          
+        } catch (err) {
+          console.error("Pipeline error:", err);
+          if (micEnabledRef.current) mediaRecorder.start();
+        }
+      };
+
+      // Start recording chunks
+      mediaRecorder.start();
+      
+      // Stop recording every 5 seconds to process
+      const recordInterval = setInterval(() => {
+        if (mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
+      }, 5000);
+
+      sessionRef.current = {
+        close: () => {
+          clearInterval(recordInterval);
+          if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+        }
+      };
 
       frameIntervalRef.current = window.setInterval(() => {
         if (!cameraEnabledRef.current || !videoRef.current || !canvasRef.current || videoRef.current.videoWidth === 0) return;
@@ -434,18 +475,7 @@ const App: React.FC = () => {
           canvasRef.current.width = 1024;
           canvasRef.current.height = 768;
           ctx.drawImage(videoRef.current, 0, 0, 1024, 768);
-          canvasRef.current.toBlob(blob => {
-            if (blob) {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = (reader.result as string).split(',')[1];
-                if (sessionRef.current) {
-                  sessionRef.current.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } });
-                }
-              };
-              reader.readAsDataURL(blob);
-            }
-          }, 'image/jpeg', JPEG_QUALITY);
+          // We can send frames to backend if needed, but currently skipping for STT/TTS flow
         }
       }, 1000 / FRAME_RATE);
 
@@ -544,7 +574,6 @@ const App: React.FC = () => {
     }
     setIsGeneratingDraft(true);
     setError(null);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const prompt = `You are a senior legal counsel. Based on the following consultation history between an advocate (NEXUS) and a client (YOU), generate a formal legal draft/petition for court submission. 
       Use professional legal formatting, formal language, and include placeholders for specific case details.
@@ -554,12 +583,14 @@ const App: React.FC = () => {
       
       Generate only the legal document content.`;
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+      const response = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: prompt })
       });
+      const data = await response.json();
       
-      setDraftText(response.text || "Failed to generate draft.");
+      setDraftText(data.draft || "Failed to generate draft.");
     } catch (err) {
       console.error(err);
       setError("Failed to generate legal draft. Please check your connection.");
@@ -577,17 +608,18 @@ const App: React.FC = () => {
     setIsSendingSupport(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `You are an AI IT Support Assistant for the "Nexus Justice" legal platform. 
       An advocate has reported the following issue to the administrative portal: "${newUserMsg.text}".
       Please provide a helpful, technical, or administrative solution to their problem. Keep it concise, professional, and actionable.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt, useWebSearch: false })
       });
+      const data = await response.json();
 
-      const newAiMsg: SupportMessage = { id: Date.now() + 1, role: 'ai', text: response.text || "I'm sorry, I couldn't process that request." };
+      const newAiMsg: SupportMessage = { id: Date.now() + 1, role: 'ai', text: data.reply || "I'm sorry, I couldn't process that request." };
       setSupportMessages(prev => [...prev, newAiMsg]);
     } catch (err) {
       console.error("Support chat error:", err);
