@@ -12,6 +12,18 @@ import path from "path";
 dotenv.config();
 
 const app = express();
+
+
+// 1. Tell Express to serve the static files from the "dist" folder
+const __dirname = path.resolve();
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// 2. Ensure that any page refresh redirects to index.html (important for React apps)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
