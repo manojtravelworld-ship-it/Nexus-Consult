@@ -19,7 +19,7 @@ const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // 2. Ensure that any page refresh redirects to index.html (important for React apps)
-app.get('*', (req, res) => {
+app.get('/*path', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
