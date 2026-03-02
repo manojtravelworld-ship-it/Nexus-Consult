@@ -284,7 +284,7 @@ async function startServer() {
   } else {
     // Serve static files in production
     app.use(express.static(path.join(process.cwd(), "dist")));
-    app.get("*", (req, res) => {
+    app.get("/*path", (req, res) => {
       res.sendFile(path.join(process.cwd(), "dist", "index.html"));
     });
   }
