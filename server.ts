@@ -19,7 +19,7 @@ const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // 2. Ensure that any page refresh redirects to index.html (important for React apps)
-app.get('/*path', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
@@ -284,7 +284,7 @@ async function startServer() {
   } else {
     // Serve static files in production
     app.use(express.static(path.join(process.cwd(), "dist")));
-    app.get("/*path", (req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile(path.join(process.cwd(), "dist", "index.html"));
     });
   }
