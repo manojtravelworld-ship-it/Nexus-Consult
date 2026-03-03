@@ -279,9 +279,13 @@ async function startServer() {
 
   // Line 280: This starts the 'else' block
   app.use(express.static(path.join(process.cwd(), "dist")));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(process.cwd(), "dist", "index.html"));
-  });
+    
+ 
+
+// TO THIS (Naming the wildcard 'splat'):
+app.get("/*splat", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+});
 } // Line 285: This closes the 'else' block
 
   app.listen(PORT, "0.0.0.0", () => {
