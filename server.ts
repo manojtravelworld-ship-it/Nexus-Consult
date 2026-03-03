@@ -14,14 +14,7 @@ dotenv.config();
 const app = express();
 
 
-// 1. Tell Express to serve the static files from the "dist" folder
-const __dirname = path.resolve();
-app.use(express.static(path.join(__dirname, 'dist')));
 
-// 2. Ensure that any page refresh redirects to index.html (important for React apps)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
 
 
 const PORT = process.env.PORT || 3000;
@@ -282,12 +275,14 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Serve static files in production
-    app.use(express.static(path.join(process.cwd(), "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(process.cwd(), "dist", "index.html"));
-    });
-  }
+    // Line 278: This closes the 'if' block from above
+
+  // Line 280: This starts the 'else' block
+  app.use(express.static(path.join(process.cwd(), "dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+  });
+} // Line 285: This closes the 'else' block
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
