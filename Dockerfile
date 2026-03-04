@@ -1,39 +1,21 @@
-# Stage 1: Build the application
-FROM node:20-alpine AS builder
+# Use Node 20
+FROM node:20-alpine
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
+# Copy dependency files and install
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN npm ci
-
-# Copy the rest of the application code
+# Copy all project files (including server.ts)
 COPY . .
 
-# Build the application
+# Build the frontend assets
 RUN npm run build
 
-# Stage 2: Serve the application
-FROM node:20-alpine AS runner
+# Expose the port (Railway typically uses 3000 or a dynamic PORT)
+EXPOSE 3000
 
-# Set the working directory
-WORKDIR /app
-
-# Install the 'serve' package globally to serve static files
-RUN npm install -g serve
-
-# Copy the built assets from the builder stage
-COPY --from=builder /app/dist ./dist
-
-# Railway provides the PORT environment variable dynamically.
-# We set a default of 3000 just in case it's run locally.
-ENV PORT=3000
-
-# Expose the port
-EXPOSE ${PORT}
-
-# Start the server, binding to 0.0.0.0 and the specified PORT
-CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT}"]
+# Start the server using tsx as defined in your package.json
+CMD ["npm", "start"]
