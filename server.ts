@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import chatRoutes from './routes/chat';
+
 import { errorHandler } from './utils/errorHandler';
 import { createServer as createViteServer } from 'vite';
 
@@ -17,7 +17,7 @@ async function startServer() {
   app.use(express.json()); // Parse JSON bodies
 
   // Routes
-  app.use('/chat', chatRoutes);
+  
 
   // Health check
   app.get('/health', (req, res) => {
