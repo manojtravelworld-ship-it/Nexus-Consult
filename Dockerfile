@@ -4,18 +4,13 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files and install
+# Copy all project files
 COPY package*.json ./
 RUN npm install
-
-# Copy all project files (including server.ts)
 COPY . .
 
-# Build the frontend assets
+# Build the frontend
 RUN npm run build
 
-# Expose the port (Railway typically uses 3000 or a dynamic PORT)
-EXPOSE 3000
-
-# Start the server using tsx as defined in your package.json
+# Start the Express server
 CMD ["npm", "start"]
