@@ -7,7 +7,7 @@
   "start": "tsx server.ts",
   "dev": "tsx watch server.ts",
   "build": "vite build"
-}
+},
   "dependencies": {
     "@google/genai": "^1.39.0",
     "axios": "^1.13.6",
