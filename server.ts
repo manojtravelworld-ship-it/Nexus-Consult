@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import { errorHandler } from './utils/errorHandler';
+import  errorHandler  from './utils/errorHandler';
 import { createServer as createViteServer } from 'vite';
 
 // Load environment variables
@@ -10,7 +10,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Middleware
   app.use(cors());
