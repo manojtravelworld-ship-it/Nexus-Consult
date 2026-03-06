@@ -3,7 +3,7 @@
     "target": "ES2022",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "outDir":"./dist"
+    "outDir":"./dist",
     "module": "ESNext",
     "lib": [
       "ES2022",
