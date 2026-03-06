@@ -4,4 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server:{
+    allowedHosts:
+      ['nexus-consult-production.up.railway.app']
+         }
 });
