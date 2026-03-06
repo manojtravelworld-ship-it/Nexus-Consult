@@ -6,7 +6,7 @@ import { ConnectionStatus } from '../types';
 
 export default function VoiceAgent() {
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
-  const [currentView, setCurrentView] = useState<any>('command');
+  const [currentView, setCurrentView] = useState('command');
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-slate-950">

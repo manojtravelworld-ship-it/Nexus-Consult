@@ -1,3 +1,4 @@
+// @ts-ignore
 import alawmulaw from 'alawmulaw';
 
 export function decodeTwilioAudio(base64Payload: string): string {
