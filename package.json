@@ -11,6 +11,7 @@
   "dependencies": {
     "@google/genai": "^1.39.0",
     "axios": "^1.13.6",
+    "alawmulaw": "^6.0.0",
     "clsx": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
