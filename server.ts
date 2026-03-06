@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import  errorHandler  from './utils/errorHandler';
+import  errorHandler  from './utils/errorHandler.js';
 import { createServer as createViteServer } from 'vite';
 
 // Load environment variables
