@@ -1,19 +1,39 @@
-# 1. Use a standard Node image
-FROM node:20-slim
+# Stage 1: Build the application
+FROM node:20-alpine AS builder
 
-# 2. Set the working directory inside the container
+# Set the working directory
 WORKDIR /app
 
-# 3. Copy package files first to leverage Docker cache
-# Ensure package.json is in the same folder as this Dockerfile
+# Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
-# 4. Install dependencies
-RUN npm install
+# Install dependencies
+RUN npm ci
 
-# 5. Copy the rest of your application code
+# Copy the rest of the application code
 COPY . .
 
-# 6. Build and start (adjust according to your package.json scripts)
+# Build the application
 RUN npm run build
-CMD ["npm", "start"]
+
+# Stage 2: Serve the application
+FROM node:20-alpine AS runner
+
+# Set the working directory
+WORKDIR /app
+
+# Install the 'serve' package globally to serve static files
+RUN npm install -g serve
+
+# Copy the built assets from the builder stage
+COPY --from=builder /app/dist ./dist
+
+# Railway provides the PORT environment variable dynamically.
+# We set a default of 3000 just in case it's run locally.
+ENV PORT=3000
+
+# Expose the port
+EXPOSE ${PORT}
+
+# Start the server, binding to 0.0.0.0 and the specified PORT
+CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT}"]

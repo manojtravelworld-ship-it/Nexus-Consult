@@ -1,0 +1,43 @@
+{
+  "name": "Nexus Justice v3.1",
+  "short_name": "Nexus Justice",
+  "description": "Neural Legal Infrastructure and Advocate Portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/nexus-icon-192/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://picsum.photos/seed/nexus-icon-512/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agency HQ",
+      "short_name": "Agency",
+      "url": "/?view=agency-hq",
+      "icons": [{ "src": "https://picsum.photos/seed/agency-icon/192/192", "sizes": "192x192" }]
+    },
+    {
+      "name": "Advocate Portal",
+      "short_name": "Advocate",
+      "url": "/?view=command",
+      "icons": [{ "src": "https://picsum.photos/seed/advocate-icon/192/192", "sizes": "192x192" }]
+    },
+    {
+      "name": "Affiliate Network",
+      "short_name": "Affiliate",
+      "url": "/?view=affiliates",
+      "icons": [{ "src": "https://picsum.photos/seed/affiliate-icon/192/192", "sizes": "192x192" }]
+    }
+  ]
+}

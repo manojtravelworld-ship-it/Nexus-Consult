@@ -147,9 +147,32 @@ const mockAffiliatePayments: AffiliatePayment[] = [
 ];
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView>('home');
+  const [view, setView] = useState<AppView>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view') as AppView;
+    return (viewParam && ['home', 'advocate-signup', 'reading-room', 'toolbox', 'command', 'clients', 'consult', 'archive', 'interaction-feed', 'agency-hq', 'agency-database', 'affiliates', 'support-chat', 'agency-messages', 'agency-broadcasts', 'agency-knowledge', 'agency-prompts', 'agency-connectivity', 'agency-api-usage', 'notifications'].includes(viewParam)) ? viewParam : 'home';
+  });
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isLoading, setIsLoading] = useState(true);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
   
   // System Prompt State
   const [systemPrompt, setSystemPrompt] = useState(() => {
@@ -898,6 +921,16 @@ const App: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/90 to-slate-950" />
                 
                 <div className="relative z-10 flex flex-col h-full p-6">
+                  <div className="flex justify-end mb-4">
+                    {deferredPrompt && (
+                      <button 
+                        onClick={handleInstall}
+                        className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-all"
+                      >
+                        Install Advocate Portal
+                      </button>
+                    )}
+                  </div>
                   <div className="flex-1 flex items-center justify-center relative">
                     {/* Neural Core Visualization */}
                     <div className="relative w-96 h-96 flex items-center justify-center">
@@ -1259,9 +1292,19 @@ const App: React.FC = () => {
                       <h2 className="text-4xl font-black italic tracking-tighter text-white">AFFILIATE <span className="text-emerald-500">NETWORK</span></h2>
                       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Manage referrals, rewards, and network growth nodes</p>
                     </div>
-                    <button onClick={() => setView('home')} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    </button>
+                    <div className="flex items-center gap-4">
+                      {deferredPrompt && (
+                        <button 
+                          onClick={handleInstall}
+                          className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-600/30 hover:bg-emerald-500 transition-all"
+                        >
+                          Install Affiliate Portal
+                        </button>
+                      )}
+                      <button onClick={() => setView('home')} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
@@ -1416,6 +1459,14 @@ const App: React.FC = () => {
                       <h2 className="text-4xl font-black italic tracking-tighter text-white">AGENCY <span className="text-indigo-500">HQ</span></h2>
                       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">Central command and control for the Nexus Justice network</p>
                     </div>
+                    {deferredPrompt && (
+                      <button 
+                        onClick={handleInstall}
+                        className="px-6 py-3 bg-amber-600 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-600/30 hover:bg-amber-500 transition-all"
+                      >
+                        Install Agency HQ
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                     {[
